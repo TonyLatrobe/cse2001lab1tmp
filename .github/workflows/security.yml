@@ -1,0 +1,79 @@
+name: Container Security Scan
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  container-security-scan:
+    runs-on: ubuntu-latest
+
+    env:
+      PROFILE: standard
+
+    steps:
+      # -----------------------------
+      # Checkout full history (required for Gitleaks)
+      # -----------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # -----------------------------
+      # Secret scan on filesystem (REAL secret detection)
+      # -----------------------------
+      - name: Gitleaks secret scan (filesystem)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------------
+      # Set up Docker
+      # -----------------------------
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      # -----------------------------
+      # Build image based on PROFILE
+      # -----------------------------
+      - name: Build image (${{ env.PROFILE }})
+        run: |
+          echo "Building image for profile: ${{ env.PROFILE }}"
+          docker compose --profile ${{ env.PROFILE }} build
+
+      # -----------------------------
+      # Generate SBOM (CycloneDX) with Syft
+      # -----------------------------
+      - name: Generate SBOM with Syft (CycloneDX)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+          | sudo sh -s -- -b /usr/local/bin
+
+          syft devsecops-nginx:${{ env.PROFILE }} \
+          -o cyclonedx-json > sbom.cdx.json
+
+      # -----------------------------
+      # Vulnerability scan using Grype (from SBOM)
+      # -----------------------------
+      - name: Grype vulnerability scan (from SBOM)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+          | sudo sh -s -- -b /usr/local/bin
+
+          grype sbom:sbom.cdx.json -o json > grype-results.json || true
+
+      # -----------------------------
+      # Upload artifacts
+      # -----------------------------
+      - name: Upload Grype scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: grype-json
+          path: grype-results.json
+
+      - name: Upload SBOM file
+        uses: actions/upload-artifact@v4
+        with:
+          name: syft-sbom
+          path: sbom.cdx.json
