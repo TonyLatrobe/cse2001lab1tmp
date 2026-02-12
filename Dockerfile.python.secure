@@ -1,0 +1,12 @@
+FROM python:3.11-alpine
+
+RUN addgroup -S app && adduser -S app -G app
+
+WORKDIR /app
+RUN pip install requests
+COPY python/app.py .
+
+RUN chown -R app:app /app
+USER app
+
+CMD ["python", "app.py"]

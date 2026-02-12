@@ -1,0 +1,6 @@
+FROM python:3.11-alpine
+
+RUN pip install requests
+
+COPY python/app.py /app.py
+CMD ["python", "/app.py"]

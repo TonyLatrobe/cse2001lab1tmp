@@ -1,0 +1,12 @@
+FROM nginx:1.25-alpine
+# ❌ BAD: hardcoded secret
+ENV API_KEY=super-secret-api-key-123
+
+RUN apk add --no-cache curl bash openssl
+
+COPY nginx/index.html /usr/share/nginx/html/index.html
+# ❌ BAD: hardcoded secret (also)
+COPY secrets.txt /app/secrets.txt
+
+
+EXPOSE 80
